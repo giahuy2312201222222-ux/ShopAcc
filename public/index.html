@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shop Acc Game</title>
+    <style>
+        body { background-color: #F5F5F7; font-family: sans-serif; margin: 0; padding-bottom: 70px; }
+        .header { background: #FFFFFF; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E3E5EC; position: sticky; top: 0; z-index: 100; }
+        .header-logo { font-weight: bold; font-size: 20px; color: #1D3FE0; }
+        .header-balance { font-weight: bold; color: #16834A; }
+        .content { padding: 15px; max-width: 800px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        @media (min-width: 768px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+        .card { background: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card-img { width: 100%; height: 150px; background: #E3E5EC; display: flex; align-items: center; justify-content: center; color: #747A86; font-size: 12px; }
+        .card-body { padding: 12px; }
+        .card-title { font-weight: bold; color: #22252B; margin-bottom: 8px; font-size: 14px; }
+        .card-price { color: #D92D20; font-weight: bold; margin-bottom: 12px; font-size: 16px; }
+        .btn-buy { background: #1D3FE0; color: white; border: none; padding: 10px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .btn-buy:disabled { background: #747A86; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #FFFFFF; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #E3E5EC; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { text-align: center; font-size: 12px; color: #747A86; }
+        .nav-item.active { color: #1D3FE0; font-weight: bold; }
+        .btn-deposit { background: #16834A; color: white; padding: 10px 20px; border-radius: 10px; border: none; margin-bottom: 20px; font-weight: bold; width: 100%; cursor: pointer;}
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-logo">SHOPACC.COM</div>
+        <div class="header-balance">Số dư: <span id="balance">0</span>đ</div>
+    </div>
+
+    <div class="content">
+        <button class="btn-deposit" onclick="deposit(100000)">Nạp Demo +100K</button>
+        <div class="grid" id="product-list"></div>
+    </div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active">Trang chủ</div>
+        <div class="nav-item">Danh mục</div>
+        <div class="nav-item">Nạp tiền</div>
+        <div class="nav-item">Mua nick</div>
+        <div class="nav-item">Tài khoản</div>
+    </div>
+
+    <script>
+        function loadData() {
+            fetch('/api/data')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('balance').innerText = data.user.balance.toLocaleString('vi-VN');
+                    const list = document.getElementById('product-list');
+                    list.innerHTML = '';
+                    
+                    data.products.forEach(p => {
+                        const isSold = p.status === 'SOLD';
+                        list.innerHTML += `
+                            <div class="card">
+                                <div class="card-img">Ảnh Acc (Demo)</div>
+                                <div class="card-body">
+                                    <div class="card-title">${p.title}</div>
+                                    <div class="card-price">${p.price.toLocaleString('vi-VN')} VNĐ</div>
+                                    <button class="btn-buy" onclick="buy(${p.id})" ${isSold ? 'disabled' : ''}>
+                                        ${isSold ? 'ĐÃ BÁN' : 'Mua Ngay'}
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
+        }
+
+        function buy(id) {
+            if(!confirm("Xác nhận mua acc này?")) return;
+            fetch('/api/buy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) alert(data.error);
+                else {
+                    alert("Mua thành công! Số dư còn: " + data.newBalance.toLocaleString('vi-VN') + "đ");
+                    loadData();
+                }
+            });
+        }
+
+        function deposit(amount) {
+            fetch('/api/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amount })
+            })
+            .then(res => res.json())
+            .then(data => { loadData(); });
+        }
+
+        loadData();
+    </script>
+</body>
+</html>
