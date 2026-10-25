@@ -7,9 +7,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const JWT_SECRET = "BI_MAT_CUA_SHOP_123"; // Đổi thành chuỗi bí mật của mày
+const JWT_SECRET = "BI_MAT_CUA_SHOP_123"; 
 
-// Hàm kiểm tra đăng nhập
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -25,13 +24,11 @@ const authenticateToken = (req, res, next) => {
 dbModule.initDB().then(() => {
     const db = dbModule;
 
-    // 1. API Đăng ký (Có thêm Email)
     app.post('/api/register', async (req, res) => {
         const { username, password, email } = req.body;
         if (!username || !password) return res.status(400).json({ error: "Thiếu thông tin" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        // Tạm thời nối chuỗi email vào cột password để lưu trữ demo
         const fakePasswordWithEmail = hashedPassword + "||" + (email || "noemail@gmail.com");
 
         db.run(`INSERT INTO users (username, password) VALUES (?, ?)`, [username, fakePasswordWithEmail], (err) => {
@@ -40,25 +37,20 @@ dbModule.initDB().then(() => {
         });
     });
 
-    // 2. API Đăng nhập
     app.post('/api/login', (req, res) => {
         const { username, password } = req.body;
         db.get(`SELECT * FROM users WHERE username = ?`, [username], async (err, user) => {
             if (err || !user) return res.status(400).json({ error: "Sai tài khoản hoặc mật khẩu" });
 
-            // Cắt lấy phần mật khẩu thực (bỏ phần email đã chèn thêm)
             const realHash = user.password.split("||")[0];
-
             const validPass = await bcrypt.compare(password, realHash);
             if (!validPass) return res.status(400).json({ error: "Sai tài khoản hoặc mật khẩu" });
 
-            // Tạo token
             const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
             res.json({ success: true, token: token, user: { username: user.username, balance: user.balance } });
         });
     });
 
-    // 3. API Lấy thông tin cá nhân
     app.get('/api/me', authenticateToken, (req, res) => {
         db.get(`SELECT balance, username FROM users WHERE id = ?`, [req.user.id], (err, user) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -66,7 +58,6 @@ dbModule.initDB().then(() => {
         });
     });
 
-    // 4. API Lấy danh sách Acc
     app.get('/api/products', (req, res) => {
         db.all(`SELECT * FROM products`, [], (err, products) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -74,7 +65,6 @@ dbModule.initDB().then(() => {
         });
     });
 
-    // 5. API Mua Acc
     app.post('/api/buy', authenticateToken, (req, res) => {
         const { productId } = req.body;
         const userId = req.user.id; 
@@ -94,7 +84,6 @@ dbModule.initDB().then(() => {
         });
     });
 
-    // 6. API Nạp tiền Demo
     app.post('/api/deposit', authenticateToken, (req, res) => {
         const { amount } = req.body;
         const userId = req.user.id;
@@ -104,7 +93,6 @@ dbModule.initDB().then(() => {
         });
     });
 
-    // Khởi động server
     app.listen(3000, () => {
         console.log('Server chạy tại cổng 3000');
     });
