@@ -1,39 +1,67 @@
-const sqlite3 = require('sqlite3').verbose();
+const initSqlJs = require('sql.js');
+const fs = require('fs');
 
-const db = new sqlite3.Database('./shop.db', (err) => {
-    if (err) console.error("Lỗi Database:", err);
-    else console.log("Kết nối SQLite thành công.");
-});
+let db;
 
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        balance INTEGER DEFAULT 0,
-        role TEXT DEFAULT 'CUSTOMER'
-    )`);
+// Hàm khởi tạo Database bất đồng bộ
+async function initDB() {
+    const SQL = await initSqlJs();
+    let dbFile = null;
+    if (fs.existsSync('./shop.db')) {
+        dbFile = fs.readFileSync('./shop.db');
+    }
+    db = new SQL.Database(dbFile);
 
-    db.run(`CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        price INTEGER,
-        status TEXT DEFAULT 'AVAILABLE'
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        amount INTEGER,
-        type TEXT,
-        note TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
+    // Tạo bảng
+    db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, balance INTEGER DEFAULT 0, role TEXT DEFAULT 'CUSTOMER')`);
+    db.run(`CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY, title TEXT, price INTEGER, status TEXT DEFAULT 'AVAILABLE')`);
+    
+    // Insert data mẫu
     db.run(`INSERT OR IGNORE INTO users (id, username, password, balance, role) VALUES (1, 'admin', '123', 0, 'ADMIN')`);
     db.run(`INSERT OR IGNORE INTO users (id, username, password, balance) VALUES (2, 'player1', '123', 500000)`);
     db.run(`INSERT OR IGNORE INTO products (id, title, price) VALUES (1, 'Acc VIP - Full Skin', 200000)`);
     db.run(`INSERT OR IGNORE INTO products (id, title, price) VALUES (2, 'Acc Clone - Có Yasuo', 50000)`);
-});
+    
+    saveDB();
+}
 
-module.exports = db;
+function saveDB() {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync('./shop.db', buffer);
+}
+
+// Hàm giả lập truy vấn của sqlite3 để code index.js cũ chạy được
+function get(query, params, callback) {
+    try {
+        const stmt = db.prepare(query);
+        stmt.bind(params);
+        if (stmt.step()) {
+            callback(null, stmt.getAsObject());
+        } else {
+            callback(null, null);
+        }
+        stmt.free();
+    } catch (e) { callback(e, null); }
+}
+
+function all(query, params, callback) {
+    try {
+        const stmt = db.prepare(query);
+        stmt.bind(params);
+        const results = [];
+        while (stmt.step()) { results.push(stmt.getAsObject()); }
+        stmt.free();
+        callback(null, results);
+    } catch (e) { callback(e, null); }
+}
+
+function run(query, params, callback) {
+    try {
+        db.run(query, params);
+        saveDB();
+        if (callback) callback(null);
+    } catch (e) { if (callback) callback(e); }
+}
+
+module.exports = { initDB, get, all, run, getDb: () => db };
