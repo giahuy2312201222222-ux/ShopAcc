@@ -3,7 +3,6 @@ const fs = require('fs');
 
 let db;
 
-// Hàm khởi tạo Database bất đồng bộ
 async function initDB() {
     const SQL = await initSqlJs();
     let dbFile = null;
@@ -31,7 +30,6 @@ function saveDB() {
     fs.writeFileSync('./shop.db', buffer);
 }
 
-// Hàm giả lập truy vấn của sqlite3 để code index.js cũ chạy được
 function get(query, params, callback) {
     try {
         const stmt = db.prepare(query);
@@ -64,4 +62,4 @@ function run(query, params, callback) {
     } catch (e) { if (callback) callback(e); }
 }
 
-module.exports = { initDB, get, all, run, getDb: () => db };
+module.exports = { initDB, get, all, run };
