@@ -8,10 +8,9 @@
         body { background-color: #F5F5F7; font-family: sans-serif; margin: 0; padding-bottom: 70px; }
         .header { background: #FFFFFF; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E3E5EC; position: sticky; top: 0; z-index: 100; }
         .header-logo { font-weight: bold; font-size: 20px; color: #1D3FE0; }
-        .header-balance { font-weight: bold; color: #16834A; }
+        .header-user { font-weight: bold; color: #16834A; font-size: 14px; }
         .content { padding: 15px; max-width: 800px; margin: 0 auto; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        @media (min-width: 768px) { .grid { grid-template-columns: repeat(3, 1fr); } }
         .card { background: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .card-img { width: 100%; height: 150px; background: #E3E5EC; display: flex; align-items: center; justify-content: center; color: #747A86; font-size: 12px; }
         .card-body { padding: 12px; }
@@ -22,6 +21,12 @@
         .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #FFFFFF; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #E3E5EC; padding-bottom: env(safe-area-inset-bottom); }
         .nav-item { text-align: center; font-size: 12px; color: #747A86; }
         .nav-item.active { color: #1D3FE0; font-weight: bold; }
+        
+        /* CSS Cho Modal Đăng nhập */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 16px; width: 80%; max-width: 400px; text-align: center; }
+        .modal input { width: 90%; padding: 10px; margin: 10px 0; border: 1px solid #E3E5EC; border-radius: 8px; }
+        .modal button { width: 100%; padding: 10px; background: #1D3FE0; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; cursor: pointer;}
         .btn-deposit { background: #16834A; color: white; padding: 10px 20px; border-radius: 10px; border: none; margin-bottom: 20px; font-weight: bold; width: 100%; cursor: pointer;}
     </style>
 </head>
@@ -29,12 +34,23 @@
 
     <div class="header">
         <div class="header-logo">SHOPACC.COM</div>
-        <div class="header-balance">Số dư: <span id="balance">0</span>đ</div>
+        <div class="header-user" id="user-info">Chưa đăng nhập</div>
     </div>
 
     <div class="content">
-        <button class="btn-deposit" onclick="deposit(100000)">Nạp Demo +100K</button>
+        <button class="btn-deposit" id="btn-deposit" onclick="deposit(100000)" style="display:none;">Nạp Demo +100K</button>
         <div class="grid" id="product-list"></div>
+    </div>
+
+    <!-- Modal Đăng nhập/Đăng ký -->
+    <div class="modal" id="auth-modal">
+        <div class="modal-content">
+            <h3 id="auth-title">Đăng Nhập</h3>
+            <input type="text" id="auth-user" placeholder="Tài khoản">
+            <input type="password" id="auth-pass" placeholder="Mật khẩu">
+            <button onclick="handleAuth()" id="auth-btn">Đăng Nhập</button>
+            <p style="font-size: 12px; cursor: pointer; color: #1D3FE0; margin-top:15px;" onclick="toggleAuthMode()" id="auth-toggle">Chưa có tài khoản? Đăng ký</p>
+        </div>
     </div>
 
     <div class="bottom-nav">
@@ -42,18 +58,20 @@
         <div class="nav-item">Danh mục</div>
         <div class="nav-item">Nạp tiền</div>
         <div class="nav-item">Mua nick</div>
-        <div class="nav-item">Tài khoản</div>
+        <div class="nav-item" onclick="showLogin()">Tài khoản</div>
     </div>
 
     <script>
-        function loadData() {
-            fetch('/api/data')
+        let isLoginMode = true;
+        let token = localStorage.getItem('token');
+
+        // Tải danh sách Acc
+        function loadProducts() {
+            fetch('/api/products')
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('balance').innerText = data.user.balance.toLocaleString('vi-VN');
                     const list = document.getElementById('product-list');
                     list.innerHTML = '';
-                    
                     data.products.forEach(p => {
                         const isSold = p.status === 'SOLD';
                         list.innerHTML += `
@@ -72,34 +90,93 @@
                 });
         }
 
-        function buy(id) {
-            if(!confirm("Xác nhận mua acc này?")) return;
-            fetch('/api/buy', {
+        // Tải thông tin User (nếu có token)
+        function loadUser() {
+            if (!token) return;
+            fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.user) {
+                        document.getElementById('user-info').innerText = `${data.user.username} | ${data.user.balance.toLocaleString('vi-VN')}đ`;
+                        document.getElementById('btn-deposit').style.display = 'block';
+                    }
+                });
+        }
+
+        // Xử lý Đăng nhập / Đăng ký
+        function handleAuth() {
+            const u = document.getElementById('auth-user').value;
+            const p = document.getElementById('auth-pass').value;
+            const endpoint = isLoginMode ? '/api/login' : '/api/register';
+
+            fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId: id })
+                body: JSON.stringify({ username: u, password: p })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.error) alert(data.error);
                 else {
-                    alert("Mua thành công! Số dư còn: " + data.newBalance.toLocaleString('vi-VN') + "đ");
-                    loadData();
+                    if (isLoginMode) {
+                        localStorage.setItem('token', data.token);
+                        token = data.token;
+                        alert("Đăng nhập thành công!");
+                        document.getElementById('auth-modal').style.display = 'none';
+                        loadUser();
+                    } else {
+                        alert("Đăng ký thành công, hãy đăng nhập!");
+                        toggleAuthMode();
+                    }
                 }
             });
         }
 
-        function deposit(amount) {
-            fetch('/api/deposit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: amount })
-            })
-            .then(res => res.json())
-            .then(data => { loadData(); });
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-title').innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
+            document.getElementById('auth-btn').innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
+            document.getElementById('auth-toggle').innerText = isLoginMode ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập";
         }
 
-        loadData();
+        function showLogin() {
+            if (token) {
+                if(confirm("Bạn có muốn đăng xuất không?")) {
+                    localStorage.removeItem('token');
+                    location.reload();
+                }
+            } else {
+                document.getElementById('auth-modal').style.display = 'flex';
+            }
+        }
+
+        function buy(id) {
+            if (!token) return alert("Vui lòng đăng nhập để mua!");
+            
+            fetch('/api/buy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ productId: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) alert(data.error);
+                else { alert("Mua thành công!"); loadUser(); loadProducts(); }
+            });
+        }
+
+        function deposit(amount) {
+            if (!token) return alert("Vui lòng đăng nhập!");
+            // Tạm thời code nạp tiền demo
+            fetch('/api/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ amount: amount })
+            }).then(() => loadUser());
+        }
+
+        loadProducts();
+        loadUser();
     </script>
 </body>
 </html>
